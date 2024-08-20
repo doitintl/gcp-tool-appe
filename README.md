@@ -18,6 +18,7 @@ Using `appe`, you can easily estimate the price of not just an individual Alerti
 In order to get the metadata of a policy or list the existing policies within a project, you will need the following permissions:
 - `monitoring.alertPolicies.get`
 - `monitoring.alertPolicies.list`
+
 These would be included in the [Monitoring AlertPolicy Viewer](https://cloud.google.com/iam/docs/understanding-roles#monitoring.alertPolicyViewer) (`roles/monitoring.alertPolicyViewer`) role. However, the metadata is not enough to estimate the price and we will need to actually execute the policy’s condition. This requires the `monitoring.timeSeries.list` permission, which is included in the [Monitoring Viewer](https://cloud.google.com/iam/docs/understanding-roles#monitoring.viewer) (`roles/monitoring.viewer`) role.
 If you want to run `appe` on more than individual policies, you will also need the `resourcemanager.projects.list` permission (which is also conveniently included in the Monitoring Viewer role). If you need to recursively scan for projects (i.e. go into subfolders), you will also need the `resourcemanager.folders.list` permission.
 You can also use the `--testPermissions` flag to let `appe` verify that you have the correct permissions before trying to use them in order to avoid errors in your logs.
