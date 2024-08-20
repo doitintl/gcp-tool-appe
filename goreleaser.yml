@@ -1,0 +1,67 @@
+project_name: appe
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - format: tar.gz
+    name_template: '{{ .ProjectName }}-{{ .Version }}_{{- if eq .Os "windows" }}win{{- else }}{{ .Os }}{{ end }}-{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+checksum:
+  name_template: "{{ .ProjectName }}-{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+binary_signs:
+  - {}
+signs:
+  - artifacts: checksum
+    args:
+      # if you are using this in a GitHub action or some other automated pipeline, you
+      # need to pass the batch flag to indicate its not interactive.
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+release:
+  # If you want to manually examine the release before its live, uncomment this line:
+  draft: true
+announce:
+  skip: true
+universal_binaries:
+  - name_template: "{{ .ProjectName }}"
+    replace: true
+nfpms:
+  # note that this is an array of nfpm configs
+  - # You can change the file name of the package.
+    # Default: `{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}`
+    file_name_template: "{{ .ProjectName }}-{{ .Version }}_{{ .Os }}-{{ .Arch }}"
+
+    # Your app's maintainer (probably you).
+    # Default is empty.
+    maintainer: Hannes Hayashi
+
+    # Template to your app's description.
+    # Default is empty.
+    description: Scans for alerting policies in the specified projects, folder or orgs and approximates their cost by executing the queries defined in them against the monitoring API.
+
+    # Your app's license.
+    # Default is empty.
+    license: MIT
+
+    # Formats to be generated.
+    formats:
+      - apk
+      - deb
+      - rpm
