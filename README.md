@@ -31,15 +31,6 @@ We recommend that you assign the following to roles for full compatibility:
 ## Installation
 The easiest way to get and install `appe` is to download one of the pre-compiled binaries from the [releases](https://github.com/doitintl/gcp-tool-appe/releases). `appe` is a self-contained binary without any dependencies and can be run from anywhere. You do not need to download any runtime and there is no need for an installer.
 
-## Authentication
-`appe` uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) (ADC) to authenticate against the various APIs.
-If you are running `appe` on a Google Cloud compute service such as Compute Engine, it will use the service's Service Account to authenticate.
-
-If you are running `appe` locally, the easiest way to set up ADC is to use [gcloud](https://cloud.google.com/sdk/gcloud/reference/auth/application-default/login) by running:
-```bash
-gcloud auth application-default login
-```
-
 See also https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev.
 
 ### macOS
@@ -56,6 +47,15 @@ The easiest way to do this is to:
 This will download the dependencies, compile the program and put the executable in your `$GOPATH/bin` directory (see [GOPATH](https://go.dev/wiki/GOPATH))
 
 Alternatively, you can also clone the repository and run `go build` to compile it manually.
+
+## Authentication
+`appe` uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) (ADC) to authenticate against the various APIs.
+If you are running `appe` on a Google Cloud compute service such as Compute Engine, it will use the service's Service Account to authenticate.
+
+If you are running `appe` locally, the easiest way to set up ADC is to use [gcloud](https://cloud.google.com/sdk/gcloud/reference/auth/application-default/login) by running:
+```bash
+gcloud auth application-default login
+```
 
 ## Usage
 Using `appe` is fairly straightforward
