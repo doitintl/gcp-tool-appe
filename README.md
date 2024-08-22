@@ -24,7 +24,7 @@ If you want to run `appe` on more than individual policies, you will also need t
 You can also use the `--testPermissions` flag to let `appe` verify that you have the correct permissions before trying to use them in order to avoid errors in your logs.
 
 ## Recommended Roles
-We recommend that you assign the following to roles for full compatibility:
+We recommend that you assign the following two roles for full compatibility:
 - [Monitoring Viewer](https://cloud.google.com/iam/docs/understanding-roles#monitoring.viewer) (`roles/monitoring.viewer`)
 - [Browser](https://cloud.google.com/iam/docs/understanding-roles#browser) (`roles/browser`)
 
