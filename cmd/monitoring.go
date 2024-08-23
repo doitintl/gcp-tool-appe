@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -127,7 +124,7 @@ func processAlertPolicy(
 	ctx context.Context,
 	queryClient *monitoring.QueryClient,
 	metricClient *monitoring.MetricClient,
-	httpClient *http.Client,
+	monitoring_v1Service *monitoring_v1.Service,
 	alertPolicy *monitoringpb.AlertPolicy,
 	start *timestamppb.Timestamp,
 	end *timestamppb.Timestamp,
@@ -168,35 +165,23 @@ func processAlertPolicy(
 		}
 		if pql != nil {
 			seconds := pql.GetEvaluationInterval().GetSeconds()
-			// https://github.com/googleapis/google-api-go-client/issues/2304
-			body, err := json.Marshal(&monitoring_v1.QueryRangeRequest{
+			resp, err := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
 				Query: pql.GetQuery(),
 				Start: start.AsTime().Format(time.RFC3339),
 				End:   end.AsTime().Format(time.RFC3339),
 				Step:  fmt.Sprintf("%ds", seconds),
-			})
+			}).Do()
 			if err != nil {
 				policyOut.Error = err.Error()
 				continue
 			}
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/location/global/prometheus/api/v1/query_range", projectId), bytes.NewReader(body))
-			if err != nil {
-				policyOut.Error = err.Error()
-				continue
-			}
-			resp, err := httpClient.Do(req)
-			if err != nil {
-				policyOut.Error = err.Error()
-				continue
-			}
-			defer resp.Body.Close()
-			res, err := io.ReadAll(resp.Body)
+			j, err := resp.MarshalJSON()
 			if err != nil {
 				policyOut.Error = err.Error()
 				continue
 			}
 			pqlResp := &pqlResponse{}
-			err = json.Unmarshal(res, pqlResp)
+			err = json.Unmarshal(j, pqlResp)
 			if err != nil {
 				policyOut.Error = err.Error()
 				continue

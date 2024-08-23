@@ -7,7 +7,6 @@ require (
 	cloud.google.com/go/monitoring v1.21.0
 	cloud.google.com/go/resourcemanager v1.10.0
 	github.com/spf13/cobra v1.8.1
-	golang.org/x/oauth2 v0.22.0
 	google.golang.org/api v0.194.0
 	google.golang.org/protobuf v1.34.2
 )
@@ -38,6 +37,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect

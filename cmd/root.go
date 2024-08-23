@@ -13,7 +13,7 @@ import (
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	"github.com/spf13/cobra"
-	"golang.org/x/oauth2/google"
+	monitoring_v1 "google.golang.org/api/monitoring/v1"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -140,14 +140,9 @@ func Execute() {
 	if err != nil {
 		log.Fatalf("Failed to create folders client: %v", err)
 	}
-	// https://github.com/googleapis/google-api-go-client/issues/2304
-	// monitoring_v1Service, err := monitoring_v1.NewService(ctx, option.WithQuotaProject(quotaProject))
-	// if err != nil {
-	// 	log.Fatalf("Failed to create monitoring v1 client: %v", err)
-	// }
-	httpClient, err := google.DefaultClient(ctx, monitoring.DefaultAuthScopes()...)
+	monitoring_v1Service, err := monitoring_v1.NewService(ctx, option.WithQuotaProject(quotaProject))
 	if err != nil {
-		log.Fatalf("Failed to create default http client: %v", err)
+		log.Fatalf("Failed to create monitoring v1 client: %v", err)
 	}
 
 	// If the application was executed with the --project or -p flag, put all the projects directly in the projects channel.
@@ -237,7 +232,7 @@ func Execute() {
 	for i := 0; i < int(threads); i++ {
 		go func() {
 			for policy := range policiesIn {
-				processAlertPolicy(ctx, queryClient, metricClient, httpClient, policy, start, end, policiesOut)
+				processAlertPolicy(ctx, queryClient, metricClient, monitoring_v1Service, policy, start, end, policiesOut)
 			}
 			wg3.Done()
 		}()
