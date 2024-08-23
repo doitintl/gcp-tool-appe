@@ -1,6 +1,6 @@
 # appe - Alerting Policy Price Estimator
 
-Starting January 2025, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts).
+Starting April 2025, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts).
 
 While Google has provided [documentation and examples](https://cloud.google.com/stackdriver/pricing#pricing-alerting), it is still very hard to actually estimate the cost of an Alerting Policy, let alone if you have dozens or possible hundreds of them.
 Using `appe`, you can easily estimate the price of not just an individual Alerting Policy, but all of them in your entire organization using a single command.
