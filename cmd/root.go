@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"encoding/csv"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -259,13 +261,13 @@ func Execute() {
 		}
 		defer csvFile.Close()
 		csvWriter := csv.NewWriter(csvFile)
-		err = csvWriter.Write([]string{"ProjectId", "Policy Name", "DisplayName", "Conditions", "Time Series", "Price", "Error"})
+		err = csvWriter.Write([]string{"ProjectId", "Policy Name", "Link", "DisplayName", "Conditions", "Time Series", "Price", "Error"})
 		if err != nil {
 			log.Fatalln("Failed writing header to file", err)
 		}
 		csvWriter.Flush()
 		for policy := range policiesOut {
-			err = csvWriter.Write([]string{policy.ProjectId, policy.Name, policy.DisplayName, strconv.Itoa(policy.Conditions), strconv.Itoa(policy.TimeSeries), strconv.FormatFloat(policy.Price, 'f', 2, 64), policy.Error})
+			err = csvWriter.Write([]string{policy.ProjectId, policy.Name, fmt.Sprintf("https://console.cloud.google.com/monitoring/alerting/policies/%s?project=%s", policy.Name[strings.LastIndex(policy.Name, "/")+1:], policy.ProjectId), policy.DisplayName, strconv.Itoa(policy.Conditions), strconv.Itoa(policy.TimeSeries), strconv.FormatFloat(policy.Price, 'f', 2, 64), policy.Error})
 			if err != nil {
 				log.Fatalln("Failed writing record to file", err)
 			}
