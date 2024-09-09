@@ -216,7 +216,7 @@ func processAlertPolicy(
 			if len(aggregations) > 1 {
 				tsReq.SecondaryAggregation = aggregations[1]
 			}
-			if tsReq.Aggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" || tsReq.SecondaryAggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" {
+			if tsReq.Aggregation == nil || tsReq.Aggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" || tsReq.SecondaryAggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" {
 				tsReq.View = monitoringpb.ListTimeSeriesRequest_FULL
 			}
 			tsIt := metricClient.ListTimeSeries(ctx, tsReq)
