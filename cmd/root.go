@@ -182,7 +182,7 @@ func Execute() {
 
 	// If one or more individual policies should be analyzed, we need to first get them from the API.
 	// We then put them directly on the policiesIn channel, which will be processes by threads that are spawned below.
-	// Finally, we will close teh projectsIn channel once done, because the policiesIn channel will be closed automatically.
+	// Finally, we will close the projectsIn channel once done, because the policiesIn channel will be closed automatically.
 	if lenPol > 0 {
 		if lenPol > int(threads) {
 			threads = int64(lenPol)
