@@ -22,7 +22,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Version: "0.1",
+	Version: "0.2",
 	Use:     "appe",
 	Short:   "Alerting Policy Price Estimator",
 	Long:    `Scans for alerting policies in the specified projects, folder or orgs and approximates their cost by executing the queries defined in them against the monitoring API`,
