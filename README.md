@@ -102,6 +102,12 @@ You can also specify multiple organizations:
 ```
 Note that you will need to specify the `--recursive` or `-r` flag to also scan subfolders.
 
+### Supported Condition Types
+The following condition types are supported by `appe`:
+- Monitoring Query Language (MQL) via [projects.timeSeries.query](https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/query)
+- Threshold and Absence via [projects.timeSeries.list](https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/list)
+- Prometheus Query Language (PromQL / PQL) via [projects.location.prometheus.api.v1.query_range](https://cloud.google.com/monitoring/api/ref_v3/rest/v1/projects.location.prometheus.api.v1/query_range)
+
 ### All Flags
 ```
   -c, --csvOut string           Path to a CSV file to redirect output to. If this is not set, human-readable output will be given on stdout.
