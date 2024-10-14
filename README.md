@@ -31,8 +31,6 @@ We recommend that you assign the following two roles for full compatibility:
 ## Installation
 The easiest way to get and install `appe` is to download one of the pre-compiled binaries from the [releases](https://github.com/doitintl/gcp-tool-appe/releases). `appe` is a self-contained binary without any dependencies and can be run from anywhere. You do not need to download any runtime and there is no need for an installer.
 
-See also https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev.
-
 ### macOS
 Since the binary is not signed with an Apple Developer Certificate, your Mac will likely report it as untrustworthy.
 There are two ways to deal with this:
@@ -56,6 +54,8 @@ If you are running `appe` locally, the easiest way to set up ADC is to use [gclo
 ```bash
 gcloud auth application-default login
 ```
+
+See also https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev.
 
 ## Usage
 Using `appe` is fairly straightforward
