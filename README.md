@@ -1,6 +1,11 @@
+# IMPORTANT NOTE
+
+Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is considered much more accurate because `appe` can currently only use the total number of time series in the estimation period (30 days). In reality, this may fluctuate causing `appe` to produce an over-estimation.
+As of this time, Google has not made the underlying data for their calculation available via any metric or API. If this changes in the future, `appe` will be updated to produce more accurate results.
+
 # appe - Alerting Policy Price Estimator
 
-Starting April 2025, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts).
+Starting April 2026, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts).
 
 While Google has provided [documentation and examples](https://cloud.google.com/stackdriver/pricing#pricing-alerting), it is still very hard to actually estimate the cost of an Alerting Policy, let alone if you have dozens or possible hundreds of them.
 Using `appe`, you can easily estimate the price of not just an individual Alerting Policy, but all of them in your entire organization using a single command.
