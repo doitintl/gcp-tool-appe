@@ -293,7 +293,7 @@ func init() {
 	rootCmd.Flags().BoolP("includeDisabled", "i", false, "If the application should also include disabled policies. (default false)")
 	rootCmd.Flags().BoolP("recursive", "r", false, "If parent should be scanned recursively. If this is not set, only projects at the root of the folder or organization will be scanned. (default false)")
 	rootCmd.Flags().Int64("threads", 4, "Number of threads to use to process folders, projects and policies in parallel.")
-	rootCmd.Flags().DurationP("duration", "d", 24*time.Hour*30, "The delta from now to go back in time for query. Default is 30 days.")
+	rootCmd.Flags().DurationP("duration", "d", 12*time.Hour, "The delta from now to go back in time for query. Default is 12 hours.")
 	rootCmd.MarkFlagsOneRequired("policy", "project", "folder", "organization")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "recursive")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "testPermissions")

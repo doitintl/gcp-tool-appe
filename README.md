@@ -1,7 +1,7 @@
 # IMPORTANT NOTE
 
-Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is considered much more accurate because `appe` can currently only use the total number of time series in the estimation period (30 days). In reality, this may fluctuate causing `appe` to produce an over-estimation.
-As of this time, Google has not made the underlying data for their calculation available via any metric or API. If this changes in the future, `appe` will be updated to produce more accurate results.
+Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is uses a very similar calculation to `appe` but only looks at the last few minutes. This will generally result in lower estimates than `appe` but you can change the length of the window `appe` goes back using the `-d` flag (eg. `-d 5m` or `-d 4h`) to get the same results. In order to more closely match the results of the preview functionality, `appe`'s default has been changed to 12h for now.
+Please note that both the preview function and `appe`'s default are not 100% accurate.
 
 # appe - Alerting Policy Price Estimator
 
