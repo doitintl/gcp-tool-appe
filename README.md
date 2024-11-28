@@ -1,7 +1,7 @@
 # IMPORTANT NOTE
 
-Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is considered much more accurate because `appe` can currently only use the total number of time series in the estimation period (30 days). In reality, this may fluctuate causing `appe` to produce an over-estimation.
-As of this time, Google has not made the underlying data for their calculation available via any metric or API. If this changes in the future, `appe` will be updated to produce more accurate results.
+Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is uses a very similar calculation to `appe` but only looks at the last few minutes / hours (the exact value is not known and seems to vary slightly). This will generally result in lower estimates than `appe` but you can change the length of the window `appe` goes back using the `-d` flag (eg. `-d 5m` or `-d 4h`) to get the same or similar results. In order to more closely match the results of the preview functionality, `appe`'s default has been changed to `12h` for now. This will likely change again if or when Google updates the built-in preview functionality again.
+Please note that both the preview function and `appe`'s default are not 100% accurate.
 
 # appe - Alerting Policy Price Estimator
 
@@ -36,8 +36,6 @@ We recommend that you assign the following two roles for full compatibility:
 ## Installation
 The easiest way to get and install `appe` is to download one of the pre-compiled binaries from the [releases](https://github.com/doitintl/gcp-tool-appe/releases). `appe` is a self-contained binary without any dependencies and can be run from anywhere. You do not need to download any runtime and there is no need for an installer.
 
-See also https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev.
-
 ### macOS
 Since the binary is not signed with an Apple Developer Certificate, your Mac will likely report it as untrustworthy.
 There are two ways to deal with this:
@@ -61,6 +59,8 @@ If you are running `appe` locally, the easiest way to set up ADC is to use [gclo
 ```bash
 gcloud auth application-default login
 ```
+
+See also https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev.
 
 ## Usage
 Using `appe` is fairly straightforward
@@ -107,10 +107,16 @@ You can also specify multiple organizations:
 ```
 Note that you will need to specify the `--recursive` or `-r` flag to also scan subfolders.
 
+### Supported Condition Types
+The following condition types are supported by `appe`:
+- Monitoring Query Language (MQL) via [projects.timeSeries.query](https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/query)
+- Threshold and Absence via [projects.timeSeries.list](https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/list)
+- Prometheus Query Language (PromQL / PQL) via [projects.location.prometheus.api.v1.query_range](https://cloud.google.com/monitoring/api/ref_v3/rest/v1/projects.location.prometheus.api.v1/query_range)
+
 ### All Flags
 ```
   -c, --csvOut string           Path to a CSV file to redirect output to. If this is not set, human-readable output will be given on stdout.
-  -d, --duration duration       The delta from now to go back in time for query. Default is 30 days. (default 720h0m0s)
+  -d, --duration duration       The delta from now to go back in time for query. Default is 12 hours. (default 12h0m0s)
   -e, --excludeFolder strings   One or more folders to exclude. Separated by  ",".
   -f, --folder strings          One or more folders to scan. Use the "-r" flag to scan recursively. Separated by ",".
   -h, --help                    help for appe
@@ -120,6 +126,7 @@ Note that you will need to specify the `--recursive` or `-r` flag to also scan s
   -p, --project strings         One or more projects to scan. Separated by ",".
   -q, --quotaProject string     A quota or billing project. Useful if you don't have the serviceusage.services.use permission in the target project.
   -r, --recursive               If parent should be scanned recursively. If this is not set, only projects at the root of the folder or organization will be scanned. (default false)
+  -s, --summary                 Whether the output should just be a summary (sum of all scanned policies) (default false)
   -t, --testPermissions         If the application should verify that the user has the necessary permissions before processing a project. (default false)
       --threads int             Number of threads to use to process folders, projects and policies in parallel. (default 4)
   -v, --version                 version for appe

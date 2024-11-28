@@ -158,7 +158,7 @@ func processAlertPolicy(
 					policyOut.Error = err.Error()
 					break
 				}
-				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (step) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
+				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (execution period) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
 				policyOut.Price += 0.03024
 				policyOut.TimeSeries++
 			}
@@ -188,7 +188,7 @@ func processAlertPolicy(
 			}
 			// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) = 2592000
 			// 2592000 * 0.35 (price) / 1000000 (per 1M) =
-			// 0.9072 / step * time series = price for all time series with this condition
+			// 0.9072 / execution period * time series = price for all time series with this condition
 			policyOut.Price += 0.9072 / float64(seconds) * float64(len(pqlResp.Data.Result))
 			policyOut.TimeSeries += len(pqlResp.Data.Result)
 		}
@@ -216,7 +216,7 @@ func processAlertPolicy(
 			if len(aggregations) > 1 {
 				tsReq.SecondaryAggregation = aggregations[1]
 			}
-			if tsReq.Aggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" || tsReq.SecondaryAggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" {
+			if tsReq.Aggregation == nil || tsReq.Aggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" || tsReq.SecondaryAggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" {
 				tsReq.View = monitoringpb.ListTimeSeriesRequest_FULL
 			}
 			tsIt := metricClient.ListTimeSeries(ctx, tsReq)
@@ -229,7 +229,7 @@ func processAlertPolicy(
 					policyOut.Error = err.Error()
 					break
 				}
-				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (step) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
+				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (execution period) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
 				policyOut.Price += 0.03024
 				policyOut.TimeSeries++
 			}

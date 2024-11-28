@@ -22,7 +22,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Version: "0.1",
+	Version: "0.2",
 	Use:     "appe",
 	Short:   "Alerting Policy Price Estimator",
 	Long:    `Scans for alerting policies in the specified projects, folder or orgs and approximates their cost by executing the queries defined in them against the monitoring API`,
@@ -87,6 +87,10 @@ func Execute() {
 		log.Fatalln(err)
 	}
 	includeDisabled, err := rootCmd.Flags().GetBool("includeDisabled")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	summary, err := rootCmd.Flags().GetBool("summary")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -182,7 +186,7 @@ func Execute() {
 
 	// If one or more individual policies should be analyzed, we need to first get them from the API.
 	// We then put them directly on the policiesIn channel, which will be processes by threads that are spawned below.
-	// Finally, we will close teh projectsIn channel once done, because the policiesIn channel will be closed automatically.
+	// Finally, we will close the projectsIn channel once done, because the policiesIn channel will be closed automatically.
 	if lenPol > 0 {
 		if lenPol > int(threads) {
 			threads = int64(lenPol)
@@ -274,6 +278,18 @@ func Execute() {
 			csvWriter.Flush()
 		}
 		// Otherwise, the application will just output to stdout
+	} else if summary {
+		policiesSum := 0
+		conditionsSum := 0
+		timeSeriesSum := 0
+		priceSum := 0.0
+		for policy := range policiesOut {
+			policiesSum++
+			conditionsSum += policy.Conditions
+			timeSeriesSum += policy.TimeSeries
+			priceSum += policy.Price
+		}
+		log.Printf("Summary: You have %d policies with a combined total of %d conditions and %d time series. It will cost approximately $%f\n", policiesSum, conditionsSum, timeSeriesSum, priceSum)
 	} else {
 		for policy := range policiesOut {
 			log.Printf("Alerting Policy %s (%s) has %d condition(s) and %d time series. It will cost approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.Price)
@@ -291,13 +307,15 @@ func init() {
 	rootCmd.Flags().StringSliceP("excludeFolder", "e", nil, "One or more folders to exclude. Separated by  \",\".")
 	rootCmd.Flags().BoolP("testPermissions", "t", false, "If the application should verify that the user has the necessary permissions before processing a project. (default false)")
 	rootCmd.Flags().BoolP("includeDisabled", "i", false, "If the application should also include disabled policies. (default false)")
+	rootCmd.Flags().BoolP("summary", "s", false, "Whether the output should just be a summary (sum of all scanned policies) (default false)")
 	rootCmd.Flags().BoolP("recursive", "r", false, "If parent should be scanned recursively. If this is not set, only projects at the root of the folder or organization will be scanned. (default false)")
 	rootCmd.Flags().Int64("threads", 4, "Number of threads to use to process folders, projects and policies in parallel.")
-	rootCmd.Flags().DurationP("duration", "d", 24*time.Hour*30, "The delta from now to go back in time for query. Default is 30 days.")
+	rootCmd.Flags().DurationP("duration", "d", 12*time.Hour, "The delta from now to go back in time for query. Default is 12 hours.")
 	rootCmd.MarkFlagsOneRequired("policy", "project", "folder", "organization")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "recursive")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "testPermissions")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "includeDisabled")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "excludeFolder")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "folder", "organization")
+	rootCmd.MarkFlagsMutuallyExclusive("csvOut", "summary")
 }
