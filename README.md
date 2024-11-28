@@ -116,7 +116,7 @@ The following condition types are supported by `appe`:
 ### All Flags
 ```
   -c, --csvOut string           Path to a CSV file to redirect output to. If this is not set, human-readable output will be given on stdout.
-  -d, --duration duration       The delta from now to go back in time for query. Default is 30 days. (default 720h0m0s)
+  -d, --duration duration       The delta from now to go back in time for query. Default is 12 hours. (default 12h0m0s)
   -e, --excludeFolder strings   One or more folders to exclude. Separated by  ",".
   -f, --folder strings          One or more folders to scan. Use the "-r" flag to scan recursively. Separated by ",".
   -h, --help                    help for appe
@@ -126,6 +126,7 @@ The following condition types are supported by `appe`:
   -p, --project strings         One or more projects to scan. Separated by ",".
   -q, --quotaProject string     A quota or billing project. Useful if you don't have the serviceusage.services.use permission in the target project.
   -r, --recursive               If parent should be scanned recursively. If this is not set, only projects at the root of the folder or organization will be scanned. (default false)
+  -s, --summary                 Whether the output should just be a summary (sum of all scanned policies) (default false)
   -t, --testPermissions         If the application should verify that the user has the necessary permissions before processing a project. (default false)
       --threads int             Number of threads to use to process folders, projects and policies in parallel. (default 4)
   -v, --version                 version for appe

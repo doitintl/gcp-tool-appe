@@ -90,6 +90,10 @@ func Execute() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	summary, err := rootCmd.Flags().GetBool("summary")
+	if err != nil {
+		log.Fatalln(err)
+	}
 	quotaProject, err := rootCmd.Flags().GetString("quotaProject")
 	if err != nil {
 		log.Fatalln(err)
@@ -274,6 +278,18 @@ func Execute() {
 			csvWriter.Flush()
 		}
 		// Otherwise, the application will just output to stdout
+	} else if summary {
+		policiesSum := 0
+		conditionsSum := 0
+		timeSeriesSum := 0
+		priceSum := 0.0
+		for policy := range policiesOut {
+			policiesSum++
+			conditionsSum += policy.Conditions
+			timeSeriesSum += policy.TimeSeries
+			priceSum += policy.Price
+		}
+		log.Printf("Summary: You have %d policies with a combined total of %d conditions and %d time series. It will cost approximately $%f\n", policiesSum, conditionsSum, timeSeriesSum, priceSum)
 	} else {
 		for policy := range policiesOut {
 			log.Printf("Alerting Policy %s (%s) has %d condition(s) and %d time series. It will cost approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.Price)
@@ -291,6 +307,7 @@ func init() {
 	rootCmd.Flags().StringSliceP("excludeFolder", "e", nil, "One or more folders to exclude. Separated by  \",\".")
 	rootCmd.Flags().BoolP("testPermissions", "t", false, "If the application should verify that the user has the necessary permissions before processing a project. (default false)")
 	rootCmd.Flags().BoolP("includeDisabled", "i", false, "If the application should also include disabled policies. (default false)")
+	rootCmd.Flags().BoolP("summary", "s", false, "Whether the output should just be a summary (sum of all scanned policies) (default false)")
 	rootCmd.Flags().BoolP("recursive", "r", false, "If parent should be scanned recursively. If this is not set, only projects at the root of the folder or organization will be scanned. (default false)")
 	rootCmd.Flags().Int64("threads", 4, "Number of threads to use to process folders, projects and policies in parallel.")
 	rootCmd.Flags().DurationP("duration", "d", 12*time.Hour, "The delta from now to go back in time for query. Default is 12 hours.")
@@ -300,4 +317,5 @@ func init() {
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "includeDisabled")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "excludeFolder")
 	rootCmd.MarkFlagsMutuallyExclusive("policy", "project", "folder", "organization")
+	rootCmd.MarkFlagsMutuallyExclusive("csvOut", "summary")
 }
