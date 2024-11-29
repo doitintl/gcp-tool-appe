@@ -289,10 +289,10 @@ func Execute() {
 			timeSeriesSum += policy.TimeSeries
 			priceSum += policy.Price
 		}
-		log.Printf("Summary: You have %d policies with a combined total of %d conditions and %d time series. It will cost approximately $%f\n", policiesSum, conditionsSum, timeSeriesSum, priceSum)
+		log.Printf("Summary: Found %d policies with a combined total of %d conditions and %d time series. Monthly cost will be approximately $%f\n", policiesSum, conditionsSum, timeSeriesSum, priceSum)
 	} else {
 		for policy := range policiesOut {
-			log.Printf("Alerting Policy %s (%s) has %d condition(s) and %d time series. It will cost approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.Price)
+			log.Printf("Alerting Policy %s (%s) has %d condition(s) and %d time series. Monthly cost will be approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.Price)
 		}
 	}
 }
