@@ -1,6 +1,6 @@
 module github.com/doitintl/gcp-tool-appe
 
-go 1.23
+go 1.23.0
 
 require (
 	cloud.google.com/go/iam v1.2.2
@@ -37,7 +37,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.32.0 // indirect
 	golang.org/x/crypto v0.29.0 // indirect
 	golang.org/x/net v0.31.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
