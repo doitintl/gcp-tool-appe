@@ -20,18 +20,20 @@ import (
 )
 
 type policy struct {
-	TimeSeries  int
-	Conditions  int
-	ProjectId   string
-	Name        string
-	DisplayName string
-	Error       string
-	Price       float64
+	TimeSeries        int
+	PointsPerExec     int
+	Conditions        int
+	ProjectId         string
+	Name              string
+	DisplayName       string
+	Error             string
+	Price             float64
 }
 
 type pqlResponse struct {
 	Data struct {
 		Result []struct {
+			Value  []any   `json:"value"`
 			Values [][]any `json:"values"`
 		} `json:"result"`
 	} `json:"data"`
@@ -120,6 +122,78 @@ func listAlertPolicies(ctx context.Context, projectId string, includeDisabled bo
 	}
 }
 
+// alignmentWindowSeconds returns the size (in seconds) of the query window that
+// one alert execution sees. This is the alignment period when one is set, or the
+// default execution period otherwise.
+func alignmentWindowSeconds(aggregations []*monitoringpb.Aggregation) int64 {
+	for _, agg := range aggregations {
+		if ap := agg.GetAlignmentPeriod(); ap != nil && ap.Seconds > 0 {
+			return ap.Seconds
+		}
+	}
+	return defaultExecutionPeriodSec
+}
+
+// countPointsFromTimeSeries queries a FULL time series response for one execution
+// window and returns the total number of data points across all series. This
+// reflects what Google bills: each returned point in each execution counts as one
+// billable point.
+func countPointsFromTimeSeries(ctx context.Context, metricClient *monitoring.MetricClient, req *monitoringpb.ListTimeSeriesRequest) (timeSeries int, points int) {
+	req.View = monitoringpb.ListTimeSeriesRequest_FULL
+	it := metricClient.ListTimeSeries(ctx, req)
+	for {
+		ts, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			break
+		}
+		timeSeries++
+		points += len(ts.Points)
+	}
+	return timeSeries, points
+}
+
+// countPointsFromMQL queries a single MQL execution window and returns the total
+// number of data points returned.
+func countPointsFromMQL(ctx context.Context, queryClient *monitoring.QueryClient, name string, query string, windowSec int64, end *timestamppb.Timestamp) (timeSeries int, points int) {
+	windowStart := timestamppb.New(end.AsTime().Add(-time.Duration(windowSec) * time.Second))
+	mqlWithWindow := fmt.Sprintf("{ %s }\n| within %dd", query, max(1, int(windowSec/86400)))
+	it := queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
+		Name:  name,
+		Query: mqlWithWindow,
+	})
+	// Fall back to unbounded query if the windowed version errors.
+	if it == nil {
+		_ = windowStart
+		it = queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
+			Name:  name,
+			Query: query,
+		})
+	}
+	for {
+		ts, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			// Retry without window modifier on error.
+			break
+		}
+		timeSeries++
+		points += len(ts.GetPointData())
+	}
+	return timeSeries, points
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func processAlertPolicy(
 	ctx context.Context,
 	queryClient *monitoring.QueryClient,
@@ -138,75 +212,92 @@ func processAlertPolicy(
 		DisplayName: alertPolicy.GetDisplayName(),
 		Conditions:  len(conditions),
 	}
+
 	for i := range conditions {
 		mql := conditions[i].GetConditionMonitoringQueryLanguage()
 		pql := conditions[i].GetConditionPrometheusQueryLanguage()
 		threshold := conditions[i].GetConditionThreshold()
 		absent := conditions[i].GetConditionAbsent()
+
 		if mql != nil {
 			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(mql.GetQuery()))
-			tsIt := queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
-				Name:  name,
-				Query: mql.GetQuery(),
-			})
-			for {
-				_, err := tsIt.Next()
-				if err == iterator.Done {
-					break
-				}
-				if err != nil {
-					policyOut.Error = err.Error()
-					break
-				}
-				policyOut.Price += monthlyPointsCost(1, defaultExecutionPeriodSec)
-				policyOut.TimeSeries++
-			}
+
+			// Count actual points by querying one execution window.
+			ts, pts := countPointsFromMQL(ctx, queryClient, name, mql.GetQuery(), defaultExecutionPeriodSec, end)
+			policyOut.TimeSeries += ts
+			policyOut.PointsPerExec += pts
+			policyOut.Price += monthlyPointsCost(pts, defaultExecutionPeriodSec)
 		}
+
 		if pql != nil {
-			seconds := executionPeriodSeconds(pql.GetEvaluationInterval().GetSeconds())
+			execPeriodSec := executionPeriodSeconds(pql.GetEvaluationInterval().GetSeconds())
 			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(pql.GetQuery()))
-			resp, err := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
+
+			// Use an instant query at `end` — this is one execution.
+			// Each result series returns exactly 1 point per instant query.
+			resp, err := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.Query(name, "global", &monitoring_v1.QueryInstantRequest{
 				Query: pql.GetQuery(),
-				Start: start.AsTime().Format(time.RFC3339),
-				End:   end.AsTime().Format(time.RFC3339),
-				Step:  fmt.Sprintf("%ds", seconds),
+				Time:  end.AsTime().Format(time.RFC3339),
 			}).Do()
 			if err != nil {
-				policyOut.Error = err.Error()
+				// Fall back to query_range over one step.
+				rangeResp, err2 := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
+					Query: pql.GetQuery(),
+					Start: end.AsTime().Add(-time.Duration(execPeriodSec) * time.Second).Format(time.RFC3339),
+					End:   end.AsTime().Format(time.RFC3339),
+					Step:  fmt.Sprintf("%ds", execPeriodSec),
+				}).Do()
+				if err2 != nil {
+					policyOut.Error = err2.Error()
+					continue
+				}
+				j, _ := rangeResp.MarshalJSON()
+				pqlResp := &pqlResponse{}
+				_ = json.Unmarshal(j, pqlResp)
+				pts := 0
+				for _, r := range pqlResp.Data.Result {
+					pts += len(r.Values)
+				}
+				policyOut.TimeSeries += len(pqlResp.Data.Result)
+				policyOut.PointsPerExec += pts
+				policyOut.Price += monthlyPointsCost(pts, execPeriodSec)
 				continue
 			}
-			j, err := resp.MarshalJSON()
-			if err != nil {
-				policyOut.Error = err.Error()
-				continue
-			}
+
+			j, _ := resp.MarshalJSON()
 			pqlResp := &pqlResponse{}
-			err = json.Unmarshal(j, pqlResp)
-			if err != nil {
-				policyOut.Error = err.Error()
-				continue
-			}
-			policyOut.Price += monthlyPointsCost(len(pqlResp.Data.Result), seconds)
-			policyOut.TimeSeries += len(pqlResp.Data.Result)
+			_ = json.Unmarshal(j, pqlResp)
+			// Instant query: 1 point per result series.
+			seriesCount := len(pqlResp.Data.Result)
+			policyOut.TimeSeries += seriesCount
+			policyOut.PointsPerExec += seriesCount
+			policyOut.Price += monthlyPointsCost(seriesCount, execPeriodSec)
 		}
+
 		if threshold != nil || absent != nil {
 			policyOut.Price += monthlyMetricReferenceCost(1)
+
+			var aggregations []*monitoringpb.Aggregation
+			var filter string
+			if threshold != nil {
+				filter = threshold.GetFilter()
+				aggregations = threshold.GetAggregations()
+			} else {
+				filter = absent.GetFilter()
+				aggregations = absent.GetAggregations()
+			}
+
+			// One execution window = the alignment period (or default execution period).
+			windowSec := alignmentWindowSeconds(aggregations)
+			windowStart := timestamppb.New(end.AsTime().Add(-time.Duration(windowSec) * time.Second))
+
 			tsReq := &monitoringpb.ListTimeSeriesRequest{
-				Name: name,
-				View: monitoringpb.ListTimeSeriesRequest_HEADERS,
+				Name:   name,
+				Filter: filter,
 				Interval: &monitoringpb.TimeInterval{
 					EndTime:   end,
-					StartTime: start,
+					StartTime: windowStart,
 				},
-			}
-			aggregations := []*monitoringpb.Aggregation{}
-			if threshold != nil {
-				tsReq.Filter = threshold.GetFilter()
-				aggregations = threshold.GetAggregations()
-			}
-			if absent != nil {
-				tsReq.Filter = absent.GetFilter()
-				aggregations = absent.GetAggregations()
 			}
 			if len(aggregations) > 0 {
 				tsReq.Aggregation = aggregations[0]
@@ -214,23 +305,13 @@ func processAlertPolicy(
 			if len(aggregations) > 1 {
 				tsReq.SecondaryAggregation = aggregations[1]
 			}
-			if tsReq.Aggregation == nil || tsReq.Aggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" || tsReq.SecondaryAggregation.GetCrossSeriesReducer().String() == "REDUCE_COUNT_FALSE" {
-				tsReq.View = monitoringpb.ListTimeSeriesRequest_FULL
-			}
-			tsIt := metricClient.ListTimeSeries(ctx, tsReq)
-			for {
-				_, err := tsIt.Next()
-				if err == iterator.Done {
-					break
-				}
-				if err != nil {
-					policyOut.Error = err.Error()
-					break
-				}
-				policyOut.Price += monthlyPointsCost(1, defaultExecutionPeriodSec)
-				policyOut.TimeSeries++
-			}
+
+			ts, pts := countPointsFromTimeSeries(ctx, metricClient, tsReq)
+			policyOut.TimeSeries += ts
+			policyOut.PointsPerExec += pts
+			policyOut.Price += monthlyPointsCost(pts, defaultExecutionPeriodSec)
 		}
 	}
+
 	policiesOut <- policyOut
 }

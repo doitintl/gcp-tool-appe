@@ -265,13 +265,13 @@ func Execute() {
 		}
 		defer csvFile.Close()
 		csvWriter := csv.NewWriter(csvFile)
-		err = csvWriter.Write([]string{"ProjectId", "Policy Name", "Link", "DisplayName", "Conditions", "Time Series", "Price", "Error"})
+		err = csvWriter.Write([]string{"ProjectId", "Policy Name", "Link", "DisplayName", "Conditions", "Time Series", "Points/Execution", "Price", "Error"})
 		if err != nil {
 			log.Fatalln("Failed writing header to file", err)
 		}
 		csvWriter.Flush()
 		for policy := range policiesOut {
-			err = csvWriter.Write([]string{policy.ProjectId, policy.Name, fmt.Sprintf("https://console.cloud.google.com/monitoring/alerting/policies/%s?project=%s", policy.Name[strings.LastIndex(policy.Name, "/")+1:], policy.ProjectId), policy.DisplayName, strconv.Itoa(policy.Conditions), strconv.Itoa(policy.TimeSeries), strconv.FormatFloat(policy.Price, 'f', 2, 64), policy.Error})
+			err = csvWriter.Write([]string{policy.ProjectId, policy.Name, fmt.Sprintf("https://console.cloud.google.com/monitoring/alerting/policies/%s?project=%s", policy.Name[strings.LastIndex(policy.Name, "/")+1:], policy.ProjectId), policy.DisplayName, strconv.Itoa(policy.Conditions), strconv.Itoa(policy.TimeSeries), strconv.Itoa(policy.PointsPerExec), strconv.FormatFloat(policy.Price, 'f', 6, 64), policy.Error})
 			if err != nil {
 				log.Fatalln("Failed writing record to file", err)
 			}
@@ -292,7 +292,7 @@ func Execute() {
 		log.Printf("Summary: You have %d policies with a combined total of %d conditions and %d time series. It will cost approximately $%f\n", policiesSum, conditionsSum, timeSeriesSum, priceSum)
 	} else {
 		for policy := range policiesOut {
-			log.Printf("Alerting Policy %s (%s) has %d condition(s) and %d time series. It will cost approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.Price)
+			log.Printf("Alerting Policy %s (%s) has %d condition(s), %d time series, %d points/execution. It will cost approximately $%f\n", policy.DisplayName, policy.Name, policy.Conditions, policy.TimeSeries, policy.PointsPerExec, policy.Price)
 		}
 	}
 }
