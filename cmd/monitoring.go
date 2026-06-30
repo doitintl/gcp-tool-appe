@@ -20,14 +20,14 @@ import (
 )
 
 type policy struct {
-	TimeSeries        int
-	PointsPerExec     int
-	Conditions        int
-	ProjectId         string
-	Name              string
-	DisplayName       string
-	Error             string
-	Price             float64
+	TimeSeries    int
+	PointsPerExec int
+	Conditions    int
+	ProjectId     string
+	Name          string
+	DisplayName   string
+	Error         string
+	Price         float64
 }
 
 type pqlResponse struct {
@@ -155,43 +155,121 @@ func countPointsFromTimeSeries(ctx context.Context, metricClient *monitoring.Met
 	return timeSeries, points
 }
 
-// countPointsFromMQL queries a single MQL execution window and returns the total
-// number of data points returned.
-func countPointsFromMQL(ctx context.Context, queryClient *monitoring.QueryClient, name string, query string, windowSec int64, end *timestamppb.Timestamp) (timeSeries int, points int) {
-	windowStart := timestamppb.New(end.AsTime().Add(-time.Duration(windowSec) * time.Second))
-	mqlWithWindow := fmt.Sprintf("{ %s }\n| within %dd", query, max(1, int(windowSec/86400)))
+// countPointsFromMQL approximates "one execution" of an MQL condition: for
+// each series the query currently returns, it counts exactly one billable
+// point — the one a fresh execution at windowSec's cadence would have
+// produced — but it tolerates metric ingestion lag by querying a wider
+// trailing window (see mqlIngestionLookbackSec) and keeping only the most
+// recent resampled point per series, rather than requiring data in the
+// literal last windowSec.
+//
+// windowSec should be the evaluation interval parsed from the query's own
+// "| every X" clause (see mqlEvaluationIntervalSeconds), since that is what
+// actually determines how often Cloud Monitoring (re-)evaluates the
+// condition and resamples its output.
+func countPointsFromMQL(ctx context.Context, queryClient *monitoring.QueryClient, name string, query string, windowSec int64) (timeSeries int, points int) {
+	lookbackSec := int64(mqlIngestionLookbackSec)
+	if windowSec > lookbackSec {
+		lookbackSec = windowSec
+	}
+	mqlWithWindow := fmt.Sprintf("%s\n| within %ds", strings.TrimSpace(query), lookbackSec)
 	it := queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
 		Name:  name,
 		Query: mqlWithWindow,
 	})
-	// Fall back to unbounded query if the windowed version errors.
-	if it == nil {
-		_ = windowStart
-		it = queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
-			Name:  name,
-			Query: query,
-		})
-	}
 	for {
 		ts, err := it.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			// Retry without window modifier on error.
 			break
 		}
-		timeSeries++
-		points += len(ts.GetPointData())
+		// Count only the most recently resampled point per series — what a
+		// single execution at `windowSec` cadence would have returned, had
+		// the metric not lagged.
+		if len(ts.GetPointData()) > 0 {
+			timeSeries++
+			points++
+		}
 	}
 	return timeSeries, points
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
+// mqlIngestionLookbackSec mirrors promqlIngestionLookbackSec: Cloud
+// Monitoring metrics can lag a few minutes behind wall-clock time, so an
+// MQL "| within" window scoped to the literal evaluation interval frequently
+// (and incorrectly) returns zero results even for metrics that are actively
+// reporting.
+const mqlIngestionLookbackSec = 5 * 60
+
+// countPointsFromPromQL counts the billable points for one execution of a
+// PromQL condition.
+//
+// Google bills a PromQL condition by splitting it into subqueries on every
+// top-level logical operator (and/or/unless) and comparison operator (>, <,
+// >=, <=, ==, !=), then summing the points returned by each subquery
+// (https://cloud.google.com/products/observability/pricing#pricing-alerting).
+// Evaluating the full expression (with its trailing comparison) instead would
+// undercount: PromQL comparisons drop non-matching series, but Google still
+// bills the points the underlying metric returned before that comparison was
+// applied.
+func countPointsFromPromQL(svc *monitoring_v1.Service, name string, query string, execPeriodSec int64, end *timestamppb.Timestamp) (timeSeries int, points int, err error) {
+	for _, subquery := range billablePromQLSubqueries(query) {
+		ts, pts, qErr := evalPromQLInstant(svc, name, subquery, execPeriodSec, end)
+		if qErr != nil {
+			return timeSeries, points, qErr
+		}
+		timeSeries += ts
+		points += pts
 	}
-	return b
+	return timeSeries, points, nil
+}
+
+// promqlIngestionLookbackSec is how far back evalPromQLInstant searches for
+// the most recent sample of each series. Cloud Monitoring metrics can lag a
+// few minutes behind wall-clock time, so a literal instant query at "now"
+// frequently (and incorrectly) returns zero results even for metrics that are
+// actively reporting.
+const promqlIngestionLookbackSec = 5 * 60
+
+// evalPromQLInstant approximates "one execution" of a PromQL (sub)query: for
+// each series the query currently returns, it counts exactly one billable
+// point (matching PromQL instant-query semantics), but it tolerates metric
+// ingestion lag by querying a short trailing window and keeping only the
+// latest sample per series, rather than requiring data at the literal instant
+// `end`.
+func evalPromQLInstant(svc *monitoring_v1.Service, name string, query string, execPeriodSec int64, end *timestamppb.Timestamp) (timeSeries int, points int, err error) {
+	lookbackSec := int64(promqlIngestionLookbackSec)
+	if execPeriodSec > lookbackSec {
+		lookbackSec = execPeriodSec
+	}
+	rangeResp, rangeErr := svc.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
+		Query: query,
+		Start: end.AsTime().Add(-time.Duration(lookbackSec) * time.Second).Format(time.RFC3339),
+		End:   end.AsTime().Format(time.RFC3339),
+		Step:  fmt.Sprintf("%ds", execPeriodSec),
+	}).Do()
+	if rangeErr != nil {
+		return 0, 0, rangeErr
+	}
+	j, jErr := rangeResp.MarshalJSON()
+	if jErr != nil {
+		return 0, 0, jErr
+	}
+	pqlResp := &pqlResponse{}
+	if uErr := json.Unmarshal(j, pqlResp); uErr != nil {
+		return 0, 0, uErr
+	}
+	// Count only the most recent sample per series — this is what an instant
+	// query at `end` would have returned, had the metric not lagged.
+	seriesWithData := 0
+	for _, r := range pqlResp.Data.Result {
+		if len(r.Values) > 0 {
+			seriesWithData++
+		}
+	}
+	return seriesWithData, seriesWithData, nil
 }
 
 func processAlertPolicy(
@@ -222,8 +300,18 @@ func processAlertPolicy(
 		if mql != nil {
 			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(mql.GetQuery()))
 
-			// Count actual points by querying one execution window.
-			ts, pts := countPointsFromMQL(ctx, queryClient, name, mql.GetQuery(), defaultExecutionPeriodSec, end)
+			// MQL's own "| every X" clause only controls how the query
+			// resamples data internally — it does not change how often Cloud
+			// Monitoring executes the condition for billing purposes. Like
+			// threshold/absence, MQL conditions always bill on the fixed 30s
+			// execution period; only PromQL's evaluationInterval can change it.
+			// https://cloud.google.com/products/observability/pricing#pricing-alerting
+			//
+			// We still pass the "| every X" interval down to size the query
+			// window: it ensures we look back far enough to catch at least
+			// one resampled bucket when "every" is large (e.g. "every 1h").
+			mqlIntervalSec := mqlEvaluationIntervalSeconds(mql.GetQuery())
+			ts, pts := countPointsFromMQL(ctx, queryClient, name, mql.GetQuery(), mqlIntervalSec)
 			policyOut.TimeSeries += ts
 			policyOut.PointsPerExec += pts
 			policyOut.Price += monthlyPointsCost(pts, defaultExecutionPeriodSec)
@@ -233,45 +321,14 @@ func processAlertPolicy(
 			execPeriodSec := executionPeriodSeconds(pql.GetEvaluationInterval().GetSeconds())
 			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(pql.GetQuery()))
 
-			// Use an instant query at `end` — this is one execution.
-			// Each result series returns exactly 1 point per instant query.
-			resp, err := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.Query(name, "global", &monitoring_v1.QueryInstantRequest{
-				Query: pql.GetQuery(),
-				Time:  end.AsTime().Format(time.RFC3339),
-			}).Do()
+			ts, pts, err := countPointsFromPromQL(monitoring_v1Service, name, pql.GetQuery(), execPeriodSec, end)
 			if err != nil {
-				// Fall back to query_range over one step.
-				rangeResp, err2 := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
-					Query: pql.GetQuery(),
-					Start: end.AsTime().Add(-time.Duration(execPeriodSec) * time.Second).Format(time.RFC3339),
-					End:   end.AsTime().Format(time.RFC3339),
-					Step:  fmt.Sprintf("%ds", execPeriodSec),
-				}).Do()
-				if err2 != nil {
-					policyOut.Error = err2.Error()
-					continue
-				}
-				j, _ := rangeResp.MarshalJSON()
-				pqlResp := &pqlResponse{}
-				_ = json.Unmarshal(j, pqlResp)
-				pts := 0
-				for _, r := range pqlResp.Data.Result {
-					pts += len(r.Values)
-				}
-				policyOut.TimeSeries += len(pqlResp.Data.Result)
-				policyOut.PointsPerExec += pts
-				policyOut.Price += monthlyPointsCost(pts, execPeriodSec)
+				policyOut.Error = err.Error()
 				continue
 			}
-
-			j, _ := resp.MarshalJSON()
-			pqlResp := &pqlResponse{}
-			_ = json.Unmarshal(j, pqlResp)
-			// Instant query: 1 point per result series.
-			seriesCount := len(pqlResp.Data.Result)
-			policyOut.TimeSeries += seriesCount
-			policyOut.PointsPerExec += seriesCount
-			policyOut.Price += monthlyPointsCost(seriesCount, execPeriodSec)
+			policyOut.TimeSeries += ts
+			policyOut.PointsPerExec += pts
+			policyOut.Price += monthlyPointsCost(pts, execPeriodSec)
 		}
 
 		if threshold != nil || absent != nil {
@@ -309,6 +366,10 @@ func processAlertPolicy(
 			ts, pts := countPointsFromTimeSeries(ctx, metricClient, tsReq)
 			policyOut.TimeSeries += ts
 			policyOut.PointsPerExec += pts
+			// Billing always uses the fixed 30s execution period for
+			// non-PromQL conditions, regardless of alignmentPeriod — only
+			// PromQL's evaluationInterval can change the execution period.
+			// https://cloud.google.com/products/observability/pricing#pricing-alerting
 			policyOut.Price += monthlyPointsCost(pts, defaultExecutionPeriodSec)
 		}
 	}
