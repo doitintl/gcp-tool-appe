@@ -137,7 +137,6 @@ func processAlertPolicy(
 		Name:        alertPolicy.GetName(),
 		DisplayName: alertPolicy.GetDisplayName(),
 		Conditions:  len(conditions),
-		Price:       1.5 * float64(len(conditions)),
 	}
 	for i := range conditions {
 		mql := conditions[i].GetConditionMonitoringQueryLanguage()
@@ -145,6 +144,7 @@ func processAlertPolicy(
 		threshold := conditions[i].GetConditionThreshold()
 		absent := conditions[i].GetConditionAbsent()
 		if mql != nil {
+			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(mql.GetQuery()))
 			tsIt := queryClient.QueryTimeSeries(ctx, &monitoringpb.QueryTimeSeriesRequest{
 				Name:  name,
 				Query: mql.GetQuery(),
@@ -158,13 +158,13 @@ func processAlertPolicy(
 					policyOut.Error = err.Error()
 					break
 				}
-				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (execution period) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
-				policyOut.Price += 0.03024
+				policyOut.Price += monthlyPointsCost(1, defaultExecutionPeriodSec)
 				policyOut.TimeSeries++
 			}
 		}
 		if pql != nil {
-			seconds := pql.GetEvaluationInterval().GetSeconds()
+			seconds := executionPeriodSeconds(pql.GetEvaluationInterval().GetSeconds())
+			policyOut.Price += monthlyMetricReferenceCost(countMetricReferencesInQuery(pql.GetQuery()))
 			resp, err := monitoring_v1Service.Projects.Location.Prometheus.Api.V1.QueryRange(name, "global", &monitoring_v1.QueryRangeRequest{
 				Query: pql.GetQuery(),
 				Start: start.AsTime().Format(time.RFC3339),
@@ -186,13 +186,11 @@ func processAlertPolicy(
 				policyOut.Error = err.Error()
 				continue
 			}
-			// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) = 2592000
-			// 2592000 * 0.35 (price) / 1000000 (per 1M) =
-			// 0.9072 / execution period * time series = price for all time series with this condition
-			policyOut.Price += 0.9072 / float64(seconds) * float64(len(pqlResp.Data.Result))
+			policyOut.Price += monthlyPointsCost(len(pqlResp.Data.Result), seconds)
 			policyOut.TimeSeries += len(pqlResp.Data.Result)
 		}
 		if threshold != nil || absent != nil {
+			policyOut.Price += monthlyMetricReferenceCost(1)
 			tsReq := &monitoringpb.ListTimeSeriesRequest{
 				Name: name,
 				View: monitoringpb.ListTimeSeriesRequest_HEADERS,
@@ -229,8 +227,7 @@ func processAlertPolicy(
 					policyOut.Error = err.Error()
 					break
 				}
-				// 60 (seconds) * 60 (minutes) * 24 (hours) * 30 (days) / 30 (execution period) * 0.35 (price) / 1000000 (per 1M) = 0.03024 (price per time series)
-				policyOut.Price += 0.03024
+				policyOut.Price += monthlyPointsCost(1, defaultExecutionPeriodSec)
 				policyOut.TimeSeries++
 			}
 		}

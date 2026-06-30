@@ -1,11 +1,14 @@
 # IMPORTANT NOTE
 
-Google has postponed the launch to April 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate is uses a very similar calculation to `appe` but only looks at the last few minutes / hours (the exact value is not known and seems to vary slightly). This will generally result in lower estimates than `appe` but you can change the length of the window `appe` goes back using the `-d` flag (eg. `-d 5m` or `-d 4h`) to get the same or similar results. In order to more closely match the results of the preview functionality, `appe`'s default has been changed to `12h` for now. This will likely change again if or when Google updates the built-in preview functionality again.
+Google has postponed billing to no sooner than September 1, 2026 and has implemented a preview function of the estimated cost when editing an alerting policy. This estimate uses a very similar calculation to `appe` but only looks at the last few minutes / hours (the exact value is not known and seems to vary slightly). You can change the length of the window `appe` goes back using the `-d` flag (eg. `-d 5m` or `-d 4h`) to get similar results. In order to more closely match the results of the preview functionality, `appe`'s default has been changed to `12h` for now. This will likely change again if or when Google updates the built-in preview functionality again.
 Please note that both the preview function and `appe`'s default are not 100% accurate.
 
 # appe - Alerting Policy Price Estimator
 
-Starting April 2026, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts).
+Starting no sooner than September 1, 2026, Google will begin charging for [Alerting Policies](https://cloud.google.com/monitoring/alerts) at:
+
+- **$0.35/month** per metric reference in a condition
+- **$0.50/million** query points returned per condition execution
 
 While Google has provided [documentation and examples](https://cloud.google.com/stackdriver/pricing#pricing-alerting), it is still very hard to actually estimate the cost of an Alerting Policy, let alone if you have dozens or possible hundreds of them.
 Using `appe`, you can easily estimate the price of not just an individual Alerting Policy, but all of them in your entire organization using a single command.
