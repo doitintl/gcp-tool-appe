@@ -52,18 +52,30 @@ func TestAlignmentWindowDefaultsToExecutionPeriod(t *testing.T) {
 
 func TestCountMetricReferencesInQuery(t *testing.T) {
 	cases := []struct {
+		name  string
 		query string
 		want  int
 	}{
-		{"", 0},
-		{"fetch gce_instance", 1},
-		{`metric.type = "a" AND metric.type = "b"`, 2},
-		{`resource.type="k8s_container" AND metric.type="kubernetes.io/container/cpu/core_usage_time"`, 1},
+		{"empty", "", 0},
+		{"mql bare fetch, no metric.type → default 1", "fetch gce_instance", 1},
+		{"mql two metric.type mentions", `metric.type = "a" AND metric.type = "b"`, 2},
+		{"threshold filter one metric.type", `resource.type="k8s_container" AND metric.type="kubernetes.io/container/cpu/core_usage_time"`, 1},
+		// PromQL selectors
+		{"promql single metric", `kube_pod_status_phase{phase="Running"} > 0`, 1},
+		{"promql two distinct metrics", `job_cronjob:kube_job_status_start_time:max{exported_namespace!=""} * ON(job) kube_job_status_failed{exported_namespace!=""} > 0`, 2},
+		{"promql same metric repeated counts once", `rate(http_requests_total{code="200"}[5m]) / rate(http_requests_total{code!=""}[5m])`, 1},
+		// Actual cronjob-failed alert query from zen-dev-166315 (2396473972022766969)
+		{"promql cronjob failed alert — 2 distinct metrics",
+			`sum by (cronjob) (clamp_max(topk by(cronjob) (1, job_cronjob:kube_job_status_start_time:max{exported_namespace!=""}), 1) * ON(job, exported_namespace) GROUP_LEFT() label_replace(label_replace((sum without(instance) (kube_job_status_failed{exported_namespace!=""} != 0)), "job", "$1", "job_name", "(.+)"), "cronjob", "$1", "label_app_kubernetes_io_name", "(.+)")) > 0`,
+			2,
+		},
 	}
 	for _, c := range cases {
-		if got := countMetricReferencesInQuery(c.query); got != c.want {
-			t.Fatalf("countMetricReferencesInQuery(%q) = %d, want %d", c.query, got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if got := countMetricReferencesInQuery(c.query); got != c.want {
+				t.Fatalf("got %d, want %d for query: %s", got, c.want, c.query)
+			}
+		})
 	}
 }
 
